@@ -7,7 +7,6 @@ from flask.views import MethodView
 from exts import db, cors
 from flask_cors import CORS
 from models import td_events, td_user, temp_id
-
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 from base64 import b64decode
