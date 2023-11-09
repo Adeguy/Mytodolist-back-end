@@ -1,5 +1,5 @@
 import json
-
+import hashlib
 import config
 from flask import Flask, render_template, request, url_for, redirect, g, session, jsonify
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
@@ -11,7 +11,7 @@ from models import td_events, td_user, temp_id
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 from base64 import b64decode
-# 创建数据库实例对象_
+# 创建数据库实例对象
 # from blueprints.login import bp as login_bp  #导入蓝图
 # from blueprints.mytodolist import bp as mytodolist_bp  #导入蓝图
 # from models import User  #创建表相关包
@@ -28,7 +28,7 @@ s = Serializer(app.config['SECRET_KEY'], 60 * 60 * 24)  # 令牌在一天后过�
 def decrypt(encrypted_data):
     key = b"wxgwxgwxgwxgwxgwxgwx_32bytes_key"  # 密钥 需要和前端相同
     print(key)
-    encrypted_str = encrypted_data['encrypted']  # 提取来自encrypted_data字典的加密文本
+    encrypted_str = encrypted_data['encrypted']  # 提取加密文本
     print(encrypted_str)
     # 密文需要是 bytes 类型，这里先从 base64 格式解码
     encrypted_data_bytes = b64decode(encrypted_str)
@@ -48,16 +48,17 @@ def hello_world():
 @app.route('/register', methods=['POST', 'GET'])  # 注册
 def res():
     encrypted_data = request.get_json()
+    print(encrypted_data)
     data=decrypt(encrypted_data)
     user_judge = td_user.query.filter_by(user=data['username']).first()
+
     if user_judge is None:
-        user = td_user(user=data['username'], password=data['password'])  # 编辑数据
+        user = td_user(user=data['username'], password=hashlib.sha256(data['password'].encode()).hexdigest())  # 编辑数据
         token = s.dumps({'username': data['username']}).decode('utf-8')
         db.session.add(user)  # 导入数据
         db.session.commit()  # 提交数据
-
+        print(':',token)
         return jsonify({'token': token}), 200
-
     else:
         return jsonify({'message': 'err'}), 401
 
@@ -67,7 +68,9 @@ def log():
     encrypted_data = request.get_json()
     data = decrypt(encrypted_data)
     user_judge = td_user.query.filter_by(user=data['username']).first()  # 查找对应数据用户
-    if user_judge is None or user_judge.password != data['password']:  # 进行逻辑判断
+    password_encipher=hashlib.sha256(data['password'].encode()).hexdigest()
+    print("password_encipher:",password_encipher)
+    if user_judge is None or user_judge.password != password_encipher:  # 进行逻辑判断
         return 'err'
     token = s.dumps({'username': data['username']}).decode('utf-8')  # 将用户名加密
     return jsonify({'token': token}), 200  # 返回JSON文件
@@ -76,6 +79,7 @@ def log():
 @app.route('/getEvent', methods=['POST', 'GET'])  # 发送数据库信息
 def get_event():
     header = request.headers.get('Authorization', '').split()  # headers 中查找一个名为 ‘Authorization’ 的头部字段,.split()返回列表
+    print(header)
     if len(header) != 2:  # 第一个数据是Authorization，第二个数据是token内容
         return jsonify({'message': 'token无效！'}), 401
     token = header[1]  # 第二个数据是token内容
@@ -85,7 +89,7 @@ def get_event():
         return jsonify({'message': 'token无效！'}), 401
     user_find = td_user.query.filter_by(user=data['username']).first()  # 根据token找到对应的用户
     events = td_events.query.filter_by(user_id=user_find.id).all()  # 根据拿到的user_id获得所有的事件
-    print(events)
+    print(':',events)
     users_dict_list = []  # 将数据转成一个字典
     for event in events:
         if event.isdelete == 1:
